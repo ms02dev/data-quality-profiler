@@ -1,0 +1,13 @@
+# Виртуальное окружение (не коммитим библиотеки) .gitignore
+
+# Секреты (не коммитим пароли)
+.env
+
+# Мусор Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Мусор macOS
+.DS_Store
