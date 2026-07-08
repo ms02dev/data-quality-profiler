@@ -22,9 +22,13 @@ def run_profiling():
         logger.info(f"{'='*50}")
         
         report = profiler.profile_table(table)
+
+        #НОВОЕ: Сохраняем снэпшот в БД
+        profiler.save_report(table, report)
         
         logger.info(f"  ✓ Строк: {report['row_count']:,}")
         logger.info(f"  ✓ Дублей: {report['duplicate_row_count']:,}")
+        logger.info(f"  ✓ Использовали pg_stats: {report['used_pg_stats']}") 
         
         for col in report["columns"]:
             logger.info(f"  Колонка '{col['column_name']}' ({col['data_type']})")
@@ -34,6 +38,9 @@ def run_profiling():
                 logger.info(f"    Min/Max: {col['min_value']} / {col['max_value']}")
             if col["avg_value"] is not None:
                 logger.info(f"    Avg: {col['avg_value']}")
+    
+# (Неделя 3): Финальный лог
+    logger.info("✅ Профилирование и сохранение всех таблиц завершено")
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "run":
