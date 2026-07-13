@@ -16,6 +16,23 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    # Сеть для сервиса
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # ВАЖНО: Здесь мы используем имя сервиса 'postgres', а не 'localhost'!
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: dqp_db
+      DB_USER: dqp_user
+      DB_PASSWORD: dqp_pass
+      PROFILER_THRESHOLD: 100000
+    depends_on:
+      postgres:
+        condition: service_healthy # Ждём, пока healthcheck БД вернёт success
 
 volumes:
   postgres_data:

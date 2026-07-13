@@ -1,3 +1,4 @@
+
 import os
 import logging
 from datetime import datetime, timezone
@@ -24,7 +25,6 @@ class DataProfiler:
     # ------------------------------------------------------------------
     # 1. Интроспекция схемы (Читаем метаданные)
     # ------------------------------------------------------------------
-    
     def get_tables(self) -> list[str]:
         """Список пользовательских таблиц в public, кроме таблиц самого профайлера."""
         logger.debug("Запрос списка таблиц из information_schema")
@@ -392,3 +392,98 @@ class DataProfiler:
             raise
         finally:
             conn.close()
+
+    # ------------------------------------------------------------------
+    # 7. Обнаружение деградации (Неделя 5)
+    # ------------------------------------------------------------------
+    def compare_with_previous(self, table: str) -> dict | None:
+        """
+        Сравнивает два последних снэпшота.
+        Флаг деградации: null_pct вырос более чем на 5 процентных пунктов.
+        """
+        logger.debug(f"Сравнение последних снэпшотов для {table}")
+        
+        # --- БЛОК 1: Получаем даты двух последних снимков ---
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT snapshot_date
+                FROM data_quality_table_report
+                WHERE table_name = %s
+                ORDER BY snapshot_date DESC
+                LIMIT 2
+            """, (table,))
+            rows = cur.fetchall()
+            cur.close()
+        except Exception as e:
+            logger.error(f"Ошибка при получении снэпшотов: {e}", exc_info=True)
+            raise
+        finally:
+            conn.close()
+
+        if len(rows) < 2:
+            logger.debug(f"Для {table} нужно минимум 2 снэпшота, есть {len(rows)}")
+            return None
+
+        # Tuple Unpacking (без "супа из индексов" [0][0])
+        (current_date,) = rows[0]
+        (previous_date,) = rows[1]
+        
+        # --- БЛОК 2: Считаем дельту (разницу) между снимками ---
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT
+                    curr.column_name,
+                    prev.null_pct                 AS prev_null_pct,
+                    curr.null_pct                 AS curr_null_pct,
+                    curr.null_pct - prev.null_pct AS delta
+                FROM data_quality_column_report curr
+                JOIN data_quality_column_report prev
+                    ON curr.column_name = prev.column_name
+                   AND curr.table_name  = prev.table_name
+                WHERE curr.table_name   = %s
+                  AND curr.snapshot_date = %s
+                  AND prev.snapshot_date = %s
+                ORDER BY delta DESC NULLS LAST
+            """, (table, current_date, previous_date))
+            
+            all_rows = cur.fetchall()
+            cur.close()
+        except Exception as e:
+            logger.error(f"Ошибка при сравнении: {e}", exc_info=True)
+            raise
+        finally:
+            conn.close()
+
+        # Явный цикл For с Guard Clauses (вместо сложного list comprehension)
+        degradations = []
+        
+        for col, prev, curr, delta in all_rows:
+            if delta is None:
+                continue
+            if delta <= 5.0:
+                continue
+                
+            degradation_item = {
+                "column":        col,
+                "prev_null_pct": float(prev),
+                "curr_null_pct": float(curr),
+                "delta":         float(delta),
+            }
+            degradations.append(degradation_item)
+
+        if degradations:
+            logger.info(f"⚠️ Обнаружена деградация в {table}: {len(degradations)} колонок(и)")
+        else:
+            logger.debug(f"Деградации в {table} не обнаружено")
+
+        return {
+            "table":           table,
+            "current_date":    str(current_date),
+            "previous_date":   str(previous_date),
+            "degradations":    degradations,
+            "has_degradation": len(degradations) > 0,
+        }

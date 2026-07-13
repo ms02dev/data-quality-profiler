@@ -73,3 +73,37 @@ FROM generate_series(1, 50000) gs;
 
 ANALYZE customers;
 ANALYZE orders;
+
+
+-- Big table для тестирования ветки pg_stats
+-- На M5 вставка 10 млн строк займёт ~1-2 минуты при первом запуске
+DROP TABLE IF EXISTS big_table;
+CREATE TABLE big_table (
+    id         bigint,
+    category   text,
+    amount     numeric,
+    created_at timestamp,
+    email      text
+);
+
+INSERT INTO big_table
+SELECT
+    gs,
+    CASE WHEN random() < 0.1 THEN NULL
+         ELSE (ARRAY['a','b','c','d'])[floor(random()*4+1)]
+    END,
+    CASE WHEN random() < 0.05 THEN NULL
+         ELSE round((random()*1000)::numeric, 2)
+    END,
+    now() - (random() * interval '365 days'),
+    CASE WHEN random() < 0.02 THEN NULL
+         ELSE 'user' || floor(random()*1000000)::text || '@test.com'
+    END
+FROM generate_series(1, 10000000) gs;
+
+-- Добавляем 100к дублей
+INSERT INTO big_table
+SELECT * FROM big_table ORDER BY random() LIMIT 100000;
+
+-- КРИТИЧЕСКИ ВАЖНО!
+ANALYZE big_table;

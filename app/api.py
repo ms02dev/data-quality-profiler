@@ -1,15 +1,19 @@
 from fastapi import FastAPI, HTTPException, Query
+from app.profiler import DataProfiler  # ← Импорт сверху (не в функции!)
 from app.models import TableReport, ColumnReport
 from app.db import get_connection
 
 app = FastAPI(title="Data Quality Profiler", version="0.1.0")
 
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
+
 @app.get("/api/latest_report", response_model=TableReport)
 def get_latest_report(table: str = Query(..., description="Имя таблицы")):
+    """Самый свежий снэпшот для указанной таблицы."""
     conn = get_connection()
     try:
         cur = conn.cursor()
@@ -21,11 +25,11 @@ def get_latest_report(table: str = Query(..., description="Имя таблицы
             LIMIT 1
         """, (table,))
         row = cur.fetchone()
-        
         if not row:
             raise HTTPException(
                 status_code=404,
-                detail=f"Отчёт для таблицы '{table}' не найден. Сначала запустите профилирование: python -m app.main run"
+                detail=f"Отчёт для таблицы '{table}' не найден. "
+                       f"Сначала запустите профилирование: python -m app.main run"
             )
         snapshot_date, row_count, dup_count = row
         
@@ -49,7 +53,7 @@ def get_latest_report(table: str = Query(..., description="Имя таблицы
         cur.close()
     finally:
         conn.close()
-        
+    
     return TableReport(
         snapshot_date=snapshot_date,
         table_name=table,
@@ -58,11 +62,13 @@ def get_latest_report(table: str = Query(..., description="Имя таблицы
         columns=columns,
     )
 
+
 @app.get("/api/report/history")
 def get_report_history(
     table: str = Query(...),
     limit: int = Query(10, ge=1, le=100),
 ):
+    """История снэпшотов — для отслеживания тренда деградации."""
     conn = get_connection()
     try:
         cur = conn.cursor()
@@ -77,14 +83,39 @@ def get_report_history(
         cur.close()
     finally:
         conn.close()
-        
+    
     if not rows:
         raise HTTPException(status_code=404, detail=f"История для '{table}' не найдена")
-        
+    
     return {
         "table": table,
         "snapshots": [
-            {"snapshot_date": str(r[0]), "row_count": r[1], "duplicate_row_count": r[2]}
+            {
+                "snapshot_date":       str(r[0]),
+                "row_count":           r[1],
+                "duplicate_row_count": r[2],
+            }
             for r in rows
         ],
     }
+
+
+@app.get("/api/degradation")
+def get_degradation(
+    table: str = Query(..., description="Имя таблицы для проверки на деградацию")
+):
+    """
+    Сравнивает два последних снэпшота и ищет колонки, 
+    где процент NULL вырос более чем на 5%.
+    """
+    # Используем DataProfiler, а не пишем SQL здесь (Separation of Concerns)
+    profiler = DataProfiler()
+    result = profiler.compare_with_previous(table)
+    
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Нужно минимум 2 снэпшота для таблицы '{table}', чтобы сравнить их. "
+                   f"Запустите профилирование дважды."
+        )
+    return result
