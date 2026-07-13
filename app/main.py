@@ -1,49 +1,68 @@
 import sys
-import logging
+import uvicorn
 from app.profiler import DataProfiler
 
-# Глобальная настройка логирования — ВЫЗЫВАЕТСЯ ОДИН РАЗ
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'  # Убираем миллисекунды для читаемости
-)
-logger = logging.getLogger(__name__)
 
 def run_profiling():
-    logger.info("🚀 Запуск профилирования всех таблиц")
+    """
+    Запускает профилирование всех таблиц и сохраняет снэпшоты в БД.
+    Используется в режиме CLI и в CI.
+    """
     profiler = DataProfiler()
     tables = profiler.get_tables()
-    logger.info(f"Найдено таблиц для профилирования: {len(tables)}")
+    
+    if not tables:
+        print("Не найдено таблиц для профилирования")
+        return
+    
+    print(f"Найдено таблиц: {len(tables)}")
     
     for table in tables:
-        logger.info(f"{'='*50}")
-        logger.info(f"Профилирование таблицы: {table}")
-        logger.info(f"{'='*50}")
+        print(f"\n{'='*60}")
+        print(f"Профилирование: {table}")
+        print(f"{'='*60}")
         
         report = profiler.profile_table(table)
-
-        #НОВОЕ: Сохраняем снэпшот в БД
         profiler.save_report(table, report)
         
-        logger.info(f"  ✓ Строк: {report['row_count']:,}")
-        logger.info(f"  ✓ Дублей: {report['duplicate_row_count']:,}")
-        logger.info(f"  ✓ Использовали pg_stats: {report['used_pg_stats']}") 
-        
-        for col in report["columns"]:
-            logger.info(f"  Колонка '{col['column_name']}' ({col['data_type']})")
-            logger.info(f"    NULL: {col['null_count']:,} ({col['null_pct']}%)")
-            logger.info(f"    Уникальных: {col['distinct_count']:,}")
-            if col["min_value"] is not None:
-                logger.info(f"    Min/Max: {col['min_value']} / {col['max_value']}")
-            if col["avg_value"] is not None:
-                logger.info(f"    Avg: {col['avg_value']}")
+        print(f"  ✓ Строк: {report['row_count']:,}")
+        print(f"  ✓ Дублей: {report['duplicate_row_count']:,}")
+        print(f"  ✓ Использована pg_stats: {report['used_pg_stats']}")
     
-# (Неделя 3): Финальный лог
-    logger.info("✅ Профилирование и сохранение всех таблиц завершено")
+    print(f"\n✅ Профилирование завершено. Снэпшоты сохранены в БД.")
+
+
+def start_api():
+    """
+    Запускает Uvicorn-сервер с FastAPI-приложением.
+    reload=True — автоперезагрузка при изменении кода (только для разработки!).
+    """
+    print("Запуск API-сервера на http://0.0.0.0:8000")
+    print("Swagger UI: http://localhost:8000/docs")
+    
+    uvicorn.run(
+        "app.api:app",      # путь к FastAPI-приложению: модуль.переменная
+        host="0.0.0.0",     # слушать все интерфейсы (нужно для Docker)
+        port=8000,          # порт
+        reload=True,        # автоперезагрузка при изменении файлов
+        log_level="info",   # уровень логирования
+    )
+
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "run":
-        run_profiling()
-    else:
-        print("Использование: python -m app.main run")  # ← print для справки
+    # Словарь команд: аргумент → функция
+    commands = {
+        "run": run_profiling,
+        "api": start_api,
+    }
+    
+    # Если аргумент не передан или неизвестен — показываем справку
+    if len(sys.argv) < 2 or sys.argv[1] not in commands:
+        print(f"❌ Неверная команда")
+        print(f"Использование: python -m app.main [{' | '.join(commands)}]")
+        print(f"  run  — запустить профилирование и сохранить снэпшоты")
+        print(f"  api  — запустить HTTP-сервер с REST API")
+        sys.exit(1)
+    
+    # Выполняем выбранную команду
+    commands[sys.argv[1]]()

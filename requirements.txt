@@ -1,3 +1,6 @@
 psycopg2-binary==2.9.10
 python-dotenv==1.0.1
 pytest==8.2.0
+fastapi==0.139.0
+pydantic==2.13.4
+uvicorn[standard]==0.51.0
