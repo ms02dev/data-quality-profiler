@@ -25,6 +25,13 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: test
+      DB_PASSWORD: test
+      DB_NAME: test_db
+
     steps:
       - uses: actions/checkout@v4
 
@@ -37,17 +44,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
-      - name: Create .env file for CI
-        run: |
-          cat > .env << ENVEOF
-          POSTGRES_HOST=localhost
-          POSTGRES_PORT=5432
-          POSTGRES_USER=test
-          POSTGRES_PASSWORD=test
-          POSTGRES_DB=test_db
-          DATABASE_URL=postgresql://test:test@localhost:5432/test_db
-          ENVEOF
 
       - name: Run tests
         run: pytest tests/ -v --tb=short
