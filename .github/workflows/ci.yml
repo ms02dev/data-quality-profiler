@@ -38,7 +38,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Create .env file for CI
+        run: |
+          cat > .env << ENVEOF
+          POSTGRES_HOST=localhost
+          POSTGRES_PORT=5432
+          POSTGRES_USER=test
+          POSTGRES_PASSWORD=test
+          POSTGRES_DB=test_db
+          DATABASE_URL=postgresql://test:test@localhost:5432/test_db
+          ENVEOF
+
       - name: Run tests
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/test_db
         run: pytest tests/ -v --tb=short
