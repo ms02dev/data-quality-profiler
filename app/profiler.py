@@ -1,17 +1,11 @@
 
-import os
 import logging
 from datetime import datetime, timezone
 from psycopg2 import sql
-from dotenv import load_dotenv
 from app.db import get_connection
+from app.config import settings
 
-# Загружаем переменные окружения из .env
-load_dotenv()
-
-# Порог для переключения между точным сканом и чтением из pg_stats.
-# os.getenv возвращает строку, поэтому оборачиваем в int().
-PROFILER_THRESHOLD = int(os.getenv("PROFILER_THRESHOLD", 100_000))
+PROFILER_THRESHOLD = settings.profiler_threshold
 
 # Создаём логгер для этого модуля
 logger = logging.getLogger(__name__)
