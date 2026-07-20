@@ -19,8 +19,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # 5. Создаём non-root пользователя (best practice безопасности)
 RUN addgroup --system appgroup && adduser --system --group appuser
 
-# 6. Копируем исходный код приложения
+# 6. Копируем исходный код приложения и тесты
 COPY ./app ./app
+COPY ./tests ./tests
 
 # 7. Передаём права на папку новому пользователю
 RUN chown -R appuser:appgroup /app
