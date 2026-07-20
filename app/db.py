@@ -1,8 +1,5 @@
-import os
 import psycopg2
-from dotenv import load_dotenv
-
-load_dotenv()  # читает .env из папки, откуда запущен Python
+from app.config import settings
 
 
 def get_connection():
@@ -20,9 +17,10 @@ def get_connection():
             conn.close()
     """
     return psycopg2.connect(
-        host=os.getenv("DB_HOST", "localhost"),
-        port=int(os.getenv("DB_PORT", 5432)),
-        dbname=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
+        host=settings.db_host,
+        port=settings.db_port,
+        dbname=settings.db_name,
+        user=settings.db_user,
+        password=settings.db_password.get_secret_value(),
     )
+
