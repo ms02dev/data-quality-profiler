@@ -2,8 +2,19 @@ from fastapi import FastAPI, HTTPException, Query
 from app.profiler import DataProfiler  # ← Импорт сверху (не в функции!)
 from app.models import TableReport, ColumnReport
 from app.db import get_connection
+from contextlib import asynccontextmanager
+from datetime import datetime
+from app.scheduler import scheduler, start_scheduler, shutdown_scheduler, TABLE_SCHEDULES, profile_one_table
 
-app = FastAPI(title="Data Quality Profiler", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    start_scheduler()
+    yield
+    shutdown_scheduler()
+
+
+app = FastAPI(title="Data Quality Profiler", version="0.1.0", lifespan=lifespan)
 
 
 @app.get("/health")
@@ -119,3 +130,57 @@ def get_degradation(
                    f"Запустите профилирование дважды."
         )
     return result
+
+
+@app.get("/api/schedule/status")
+def schedule_status():
+    result = []
+    
+    for job in scheduler.get_jobs():
+        # Получаем имя таблицы
+        if job.args:
+            table_name = job.args[0]
+        else:
+            table_name = None
+        
+        # Получаем интервал в часах
+        if job.args:
+            schedule_config = TABLE_SCHEDULES.get(job.args[0], {})
+            interval_hours = schedule_config.get("hours")
+        else:
+            interval_hours = None
+        
+        # Получаем время следующего запуска
+        if job.next_run_time is not None:
+            next_run = job.next_run_time.isoformat()
+        else:
+            next_run = None
+        
+        # Собираем словарь для этой задачи
+        job_info = {
+            "table": table_name,
+            "interval_hours": interval_hours,
+            "next_run_time": next_run,
+        }
+        result.append(job_info)
+    
+    return result
+
+
+@app.post("/api/schedule/trigger")
+def schedule_trigger(table: str = Query(..., description="Имя таблицы для запуска вне расписания")):
+    profiler = DataProfiler()
+    available_tables = profiler.get_tables()
+    if table not in available_tables:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Таблица '{table}' не найдена в БД. Доступные таблицы: {', '.join(available_tables)}",
+        )
+    scheduler.add_job(
+        profile_one_table,
+        trigger="date",
+        run_date=datetime.now(),
+        args=[table],
+        id=f"manual_{table}_{datetime.now().timestamp()}",
+    )
+    return {"status": "triggered", "table": table}

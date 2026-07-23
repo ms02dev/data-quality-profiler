@@ -21,5 +21,12 @@ class Settings(BaseSettings):
     # --- Profiler Settings ---
     profiler_threshold: int = Field(default=100_000, ge=0)
 
+    #--- Scheduler Settings ---
+
+    schedule_customers_hours: int = Field(default=6, ge=1, le=168)
+    schedule_orders_hours: int = Field(default=12, ge=1, le=168)
+    schedule_big_table_hours: int = Field(default=24, ge=1, le=168)
+
 # Создаётся один раз при первом импорте app.config
 settings = Settings()
+

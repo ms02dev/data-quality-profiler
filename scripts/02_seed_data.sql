@@ -77,6 +77,7 @@ ANALYZE orders;
 
 -- Big table для тестирования ветки pg_stats
 -- На M5 вставка 10 млн строк займёт ~1-2 минуты при первом запуске
+
 DROP TABLE IF EXISTS big_table;
 CREATE TABLE big_table (
     id         bigint,
